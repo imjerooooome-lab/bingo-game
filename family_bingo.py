@@ -262,7 +262,7 @@ HOST_HTML = """
     <script>
         let soundEnabled = false;
         const popSound = new Audio('https://actions.google.com/sounds/v1/cartoon/pop.ogg');
-        const winSound = new Audio('https://actions.google.com/sounds/v1/crowds/female_cheer.ogg');
+        const winSound = new Audio('https://www.myinstants.com/media/sounds/tadaa.mp3');
         
         function enableSound() {
             soundEnabled = true;
