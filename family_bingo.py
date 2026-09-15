@@ -619,26 +619,98 @@ PLAYER_HTML = """
 </body>
 </html>
 """
+LANDING_HTML = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Bingo Night</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a2e, #16213e); color: white; text-align: center; padding: 50px 20px; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 0; }
+        h1 { color: #ffd700; font-size: 3rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        p { font-size: 1.2rem; color: #aaa; margin-bottom: 40px; }
+        .btn-container { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 300px; }
+        .btn { padding: 20px; font-size: 1.2rem; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .btn:active { transform: scale(0.95); }
+        .host-btn { background: linear-gradient(135deg, #4caf50, #2e7d32); }
+        .player-btn { background: linear-gradient(135deg, #2196F3, #1565C0); }
+    </style>
+</head>
+<body>
+    <h1>🎱 Family Bingo! </h1>
+    <p>Welcome! Please choose your role:</p>
+    <div class="btn-container">
+        <button class="btn host-btn" onclick="window.location.href='/host'">I am the HOST (Caller)</button>
+        <button class="btn player-btn" onclick="joinGame()">I am a PLAYER</button>
+    </div>
 
+    <script>
+        function joinGame() {
+            let name = prompt("Enter your name to join:");
+            if (name) {
+                fetch('/api/create_session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: name})
+                })
+                .then(r => r.json())
+                .then(data => {
+                    window.location.href = '/play/' + data.session_id;
+                });
+            }
+        }
+    </script>
+</body>
+</html>
+"""
 # ===================== ROUTES =====================
 @app.route('/')
+def landing():
+    return render_template_string(LANDING_HTML)
+
+@app.route('/host')
 def host():
     return render_template_string(HOST_HTML, called_numbers=game_state['called_numbers'])
+
+@app.route('/api/create_session', methods=['POST'])
+def create_session():
+    data = request.json
+    name = data.get('name', 'Player')
+    session_id = str(uuid.uuid4())
+    game_state['sessions'][session_id] = []
+    game_state['session_names'][session_id] = name
+    # Give them one card immediately
+    new_card_id = str(uuid.uuid4())
+    game_state['cards'][new_card_id] = generate_card()
+    game_state['marked'][new_card_id] = set()
+    game_state['sessions'][session_id].append(new_card_id)
+    return jsonify({'session_id': session_id})
 
 @app.route('/play/<session_id>')
 def player(session_id):
     if session_id not in game_state['sessions']:
+        # If they refresh or join late, create a session for them
         game_state['sessions'][session_id] = []
         game_state['session_names'][session_id] = f"Player {session_id[:6]}"
-    if not game_state['sessions'][session_id]:
         new_card_id = str(uuid.uuid4())
         game_state['cards'][new_card_id] = generate_card()
         game_state['marked'][new_card_id] = set()
         game_state['sessions'][session_id].append(new_card_id)
+        
     session_cards = [(cid, game_state['cards'][cid]) for cid in game_state['sessions'][session_id]]
     player_name = game_state['session_names'][session_id]
     game_started = len(game_state['called_numbers']) > 0
-    return render_template_string(PLAYER_HTML, session_id=session_id, cards=session_cards, player_name=player_name, game_started=game_started, price_per_card=game_state['price_per_card'], current_pattern=game_state['current_pattern'])
+    
+    return render_template_string(
+        PLAYER_HTML, 
+        session_id=session_id, 
+        cards=session_cards, 
+        player_name=player_name,
+        game_started=game_started,
+        price_per_card=game_state['price_per_card'],
+        current_pattern=game_state['current_pattern']
+    )
 
 @app.route('/api/add_card/<session_id>', methods=['POST'])
 def add_card(session_id):
@@ -652,8 +724,6 @@ def add_card(session_id):
     game_state['cards'][new_card_id] = generate_card()
     game_state['marked'][new_card_id] = set()
     game_state['sessions'][session_id].append(new_card_id)
-    
-    # FIX: Added 'success': True to the response so the phone knows it worked!
     return jsonify({'success': True, 'card_id': new_card_id, 'card': game_state['cards'][new_card_id]})
 
 @app.route('/api/remove_card/<session_id>/<card_id>', methods=['POST'])
@@ -717,7 +787,7 @@ def claim_bingo():
                 marked_nums = set(marked_cards[card_id])
                 valid_marks = marked_nums.issubset(set(game_state['called_numbers']) | {0})
                 if not valid_marks:
-                    return jsonify({'win': False, 'message': '⚠️ You marked a number that hasn\'t been called yet!'})
+                    return jsonify({'win': False, 'message': '️ You marked a number that hasn\'t been called yet!'})
                 game_state['marked'][card_id] = marked_nums
                 if check_bingo(marked_nums, game_state['cards'][card_id]):
                     game_state['winner'] = session_id
@@ -775,7 +845,6 @@ def reset_game():
     return jsonify({'status': 'reset'})
 
 if __name__ == '__main__':
-    # Render provides a PORT environment variable. We use it, or default to 5000.
     port = int(os.environ.get('PORT', 5000))
     print(f"\n--- FAMILY BINGO STARTED ON PORT {port} ---")
     app.run(host='0.0.0.0', port=port, debug=False)
