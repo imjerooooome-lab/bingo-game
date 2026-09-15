@@ -1,6 +1,6 @@
-import os
 import random
 import uuid
+import os
 from flask import Flask, render_template_string, request, jsonify, redirect
 
 app = Flask(__name__)
@@ -80,7 +80,6 @@ def check_bingo(marked_set, card_grid):
     if pattern == 'cross': return check_cross(marked_set, card_grid)
     return False
 
-# ===================== HOST HTML =====================
 HOST_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -169,7 +168,7 @@ HOST_HTML = """
     </style>
 </head>
 <body>
-    <h1>🎱 BINGO CALLER </h1>
+    <h1>🎱 BINGO CALLER 🎱</h1>
     <div class="pot-container">
         <div class="pot-display">
             <div class="pot-label">Current Pot</div>
@@ -182,7 +181,7 @@ HOST_HTML = """
         <button class="mode-btn blackout-5" id="mode-5" onclick="setMode(5)">Blackout ($5/card)</button>
     </div>
     <div class="pattern-section">
-        <div class="pattern-title"> TARGET PATTERN</div>
+        <div class="pattern-title">🎯 TARGET PATTERN</div>
         <div class="pattern-container">
             <button class="pattern-btn active" id="pat-straight" onclick="setPattern('straight')">Straight</button>
             <button class="pattern-btn" id="pat-4sides" onclick="setPattern('4sides')">4 Sides</button>
@@ -206,10 +205,10 @@ HOST_HTML = """
                     <span class="ball-letter" id="ball-letter"></span>
                     <span class="ball-number" id="ball-number"></span>
                 </div>
-                <div id="display-placeholder" class="display-placeholder"></div>
+                <div id="display-placeholder" class="display-placeholder">🎱</div>
             </div>
             <div class="controls">
-                <button class="btn btn-call" id="call-btn" onclick="callNumber()"> Call Next Number</button>
+                <button class="btn btn-call" id="call-btn" onclick="callNumber()">🎤 Call Next Number</button>
                 <br>
                 <button class="btn btn-next" id="next-round-btn" onclick="nextRound()"> NEXT ROUND</button>
                 <br>
@@ -218,7 +217,7 @@ HOST_HTML = """
         </div>
         <div class="players-column">
             <div class="players-list">
-                <h3> Players in Game (<span id="player-count">0</span>)</h3>
+                <h3>👥 Players in Game (<span id="player-count">0</span>)</h3>
                 <ul id="players-list">
                     <li style="text-align:center; color:#888; display:block;">Waiting for players...</li>
                 </ul>
@@ -371,7 +370,7 @@ HOST_HTML = """
         setInterval(() => {
             fetch('/api/check_winner').then(r => r.json()).then(data => {
                 if (data.winner) {
-                    document.getElementById('winner-msg').innerText = ` ${data.winner_name} WON $${data.total_pot}! 🎉`;
+                    document.getElementById('winner-msg').innerText = `🎉 ${data.winner_name} WON $${data.total_pot}! 🎉`;
                     document.getElementById('winner-msg').style.display = 'block';
                     document.getElementById('next-round-btn').style.display = 'inline-block';
                     document.getElementById('call-btn').disabled = true;
@@ -387,7 +386,6 @@ HOST_HTML = """
 </html>
 """
 
-# ===================== PLAYER HTML =====================
 PLAYER_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -547,7 +545,7 @@ PLAYER_HTML = """
                     <span class="cb-letter">${letter}</span><span class="cb-number">${num}</span></div>`;
             } else if (!num && lastCalledNum !== 0) {
                 lastCalledNum = 0;
-                document.getElementById('called-ball-container').innerHTML = '<div class="called-ball-empty"></div>';
+                document.getElementById('called-ball-container').innerHTML = '<div class="called-ball-empty">🎱</div>';
             }
         }
         function showGameOverModal(winnerName, pot) {
@@ -578,7 +576,7 @@ PLAYER_HTML = """
             }).then(r => r.json()).then(data => {
                 const status = document.getElementById('status');
                 if (data.win) {
-                    status.innerText = ` BINGO! YOU WON $${data.pot} on Card ${data.winning_card_index}! `;
+                    status.innerText = `🎉 BINGO! YOU WON $${data.pot} on Card ${data.winning_card_index}! 🎉`;
                     status.style.color = "#ffeb3b"; status.style.fontSize = "1.4rem";
                 } else if (data.message) {
                     status.innerText = data.message; status.style.color = "#ffcdd2"; status.style.fontSize = "1.1rem";
@@ -603,14 +601,12 @@ PLAYER_HTML = """
                     currentPattern = data.current_pattern;
                     document.getElementById('target-pattern-display').innerText = `🎯 Target: ${patternNames[currentPattern]}`;
                 }
-                
-                // FIX: Automatically show/hide the Add Card button based on game state
                 const btn = document.getElementById('add-card-btn');
                 if (btn) {
                     if (data.game_started) {
                         btn.style.display = 'none';
                     } else {
-                        btn.style.display = 'block'; // Show it again for the next round!
+                        btn.style.display = 'block';
                     }
                 }
             });
@@ -619,7 +615,11 @@ PLAYER_HTML = """
 </body>
 </html>
 """
-LANDING_HTML = """
+
+# ===================== ROUTES =====================
+@app.route('/')
+def landing():
+    return render_template_string("""
 <!DOCTYPE html>
 <html>
 <head>
@@ -630,86 +630,56 @@ LANDING_HTML = """
         .box { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 10px; margin: 20px auto; max-width: 400px; }
         .link { background: #2196F3; padding: 15px; border-radius: 5px; margin: 10px 0; word-break: break-all; font-size: 0.9rem; }
         .host { background: #4caf50; }
+        a { color: white; text-decoration: none; }
     </style>
 </head>
 <body>
     <h1>🎱 Family Bingo</h1>
     <div class="box">
         <h3>Host Link (You):</h3>
-        <div class="link host">""" + request.host_url + """host</div>
+        <div class="link host"><a href="/host">""" + request.host_url + """host</a></div>
     </div>
     <div class="box">
         <h3>Player Link (Share this):</h3>
-        <div class="link">""" + request.host_url + """join</div>
+        <div class="link"><a href="/join">""" + request.host_url + """join</a></div>
     </div>
 </body>
 </html>
-"""
-# ===================== ROUTES =====================
-@app.route('/')
-def landing():
-    return render_template_string(LANDING_HTML)
+    """)
+
+@app.route('/host')
+def host():
+    return render_template_string(HOST_HTML, called_numbers=game_state['called_numbers'])
 
 @app.route('/join')
 def join_page():
     session_id = str(uuid.uuid4())
     game_state['sessions'][session_id] = []
     game_state['session_names'][session_id] = f"Player {session_id[:6]}"
-    # Create first card
     new_card_id = str(uuid.uuid4())
     game_state['cards'][new_card_id] = generate_card()
     game_state['marked'][new_card_id] = set()
     game_state['sessions'][session_id].append(new_card_id)
     return redirect(f'/play/{session_id}')
 
-@app.route('/host')
-def host():
-    return render_template_string(HOST_HTML, called_numbers=game_state['called_numbers'])
-
-@app.route('/api/create_session', methods=['POST'])
-def create_session():
-    data = request.json
-    name = data.get('name', 'Player')
-    session_id = str(uuid.uuid4())
-    game_state['sessions'][session_id] = []
-    game_state['session_names'][session_id] = name
-    # Give them one card immediately
-    new_card_id = str(uuid.uuid4())
-    game_state['cards'][new_card_id] = generate_card()
-    game_state['marked'][new_card_id] = set()
-    game_state['sessions'][session_id].append(new_card_id)
-    return jsonify({'session_id': session_id})
-
 @app.route('/play/<session_id>')
 def player(session_id):
     if session_id not in game_state['sessions']:
-        # If they refresh or join late, create a session for them
         game_state['sessions'][session_id] = []
         game_state['session_names'][session_id] = f"Player {session_id[:6]}"
         new_card_id = str(uuid.uuid4())
         game_state['cards'][new_card_id] = generate_card()
         game_state['marked'][new_card_id] = set()
         game_state['sessions'][session_id].append(new_card_id)
-        
     session_cards = [(cid, game_state['cards'][cid]) for cid in game_state['sessions'][session_id]]
     player_name = game_state['session_names'][session_id]
     game_started = len(game_state['called_numbers']) > 0
-    
-    return render_template_string(
-        PLAYER_HTML, 
-        session_id=session_id, 
-        cards=session_cards, 
-        player_name=player_name,
-        game_started=game_started,
-        price_per_card=game_state['price_per_card'],
-        current_pattern=game_state['current_pattern']
-    )
+    return render_template_string(PLAYER_HTML, session_id=session_id, cards=session_cards, player_name=player_name, game_started=game_started, price_per_card=game_state['price_per_card'], current_pattern=game_state['current_pattern'])
 
 @app.route('/api/add_card/<session_id>', methods=['POST'])
 def add_card(session_id):
     if len(game_state['called_numbers']) > 0:
         return jsonify({'success': False, 'message': 'Game already started! No new cards allowed.'})
-        
     if session_id not in game_state['sessions']:
         game_state['sessions'][session_id] = []
         game_state['session_names'][session_id] = f"Player {session_id[:6]}"
@@ -780,7 +750,7 @@ def claim_bingo():
                 marked_nums = set(marked_cards[card_id])
                 valid_marks = marked_nums.issubset(set(game_state['called_numbers']) | {0})
                 if not valid_marks:
-                    return jsonify({'win': False, 'message': '️ You marked a number that hasn\'t been called yet!'})
+                    return jsonify({'win': False, 'message': '⚠️ You marked a number that hasn\'t been called yet!'})
                 game_state['marked'][card_id] = marked_nums
                 if check_bingo(marked_nums, game_state['cards'][card_id]):
                     game_state['winner'] = session_id
