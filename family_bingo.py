@@ -261,8 +261,9 @@ HOST_HTML = """
     </div>
     <script>
         let soundEnabled = false;
+        let hasPlayedWinSound = false; // <--- ADD THIS
         const popSound = new Audio('https://actions.google.com/sounds/v1/cartoon/pop.ogg');
-        const winSound = new Audio('https://actions.google.com/sounds/v1/crowds/female_cheer.ogg');
+        const winSound = new Audio('https://www.myinstants.com/media/sounds/success.mp3'); // <--- NEW PLEASANT SOUND
         
         function enableSound() {
             soundEnabled = true;
@@ -421,7 +422,10 @@ HOST_HTML = """
                 if (data.winner) {
                     document.getElementById('winner-msg').innerText = `🎉 ${data.winner_name} WON $${data.total_pot}! 🎉`;
                     document.getElementById('winner-msg').style.display = 'block';
-                    playWin();
+                    if (!hasPlayedWinSound) {
+                        playWin();
+                        hasPlayedWinSound = true;
+                    }
                     document.getElementById('next-round-btn').style.display = 'inline-block';
                     document.getElementById('call-btn').disabled = true;
                 }
@@ -520,8 +524,9 @@ PLAYER_HTML = """
     </div>
     <script>
         let soundEnabled = false;
+        let hasPlayedWinSound = false; // <--- ADD THIS
         const popSound = new Audio('https://actions.google.com/sounds/v1/cartoon/pop.ogg');
-        const winSound = new Audio('https://actions.google.com/sounds/v1/crowds/female_cheer.ogg');
+        const winSound = new Audio('https://www.myinstants.com/media/sounds/success.mp3'); // <--- NEW PLEASANT SOUND
         
         function enableSound() {
             soundEnabled = true;
@@ -617,17 +622,24 @@ PLAYER_HTML = """
             }
         }
         function showGameOverModal(winnerName, pot) {
-            document.getElementById('modal-winner-name').innerText = winnerName;
-            document.getElementById('modal-pot-amount').innerText = `$${pot}`;
-            document.getElementById('game-over-modal').classList.add('show');
-            isModalShowing = true;
-            playWin();
+            if (!isModalShowing) { // Make sure it only triggers once
+                document.getElementById('modal-winner-name').innerText = winnerName;
+                document.getElementById('modal-pot-amount').innerText = `$${pot}`;
+                document.getElementById('game-over-modal').classList.add('show');
+                isModalShowing = true;
+                
+                if (!hasPlayedWinSound) {
+                    playWin();
+                    hasPlayedWinSound = true;
+                }
+            }
         }
         function hideModalAndClearMarks() {
             document.getElementById('game-over-modal').classList.remove('show');
             document.querySelectorAll('.cell.marked').forEach(cell => { if (cell.dataset.num !== '0') cell.classList.remove('marked'); });
             document.getElementById('status').innerText = '';
             isModalShowing = false;
+            hasPlayedWinSound = false;
         }
         function playAgain() {
             fetch(`/api/clear_marks/${sessionId}`, { method: 'POST' }).then(() => hideModalAndClearMarks());
