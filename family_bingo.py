@@ -73,6 +73,14 @@ def check_cross(marked_set, card_grid):
         return True
     return False
 
+def check_blackout(marked_set, card_grid):
+    """Check if ALL numbers on the card are marked (except free space)"""
+    for row in card_grid:
+        for num in row:
+            if num != 0 and num not in marked_set:  # 0 is free space
+                return False
+    return True
+
 def check_bingo(marked_set, card_grid):
     marked_set.add(0)
     pattern = game_state['current_pattern']
@@ -80,6 +88,7 @@ def check_bingo(marked_set, card_grid):
     if pattern == '4sides': return check_4_sides(marked_set, card_grid)
     if pattern == 'parallel': return check_parallel(marked_set, card_grid)
     if pattern == 'cross': return check_cross(marked_set, card_grid)
+    if pattern == 'blackout': return check_blackout(marked_set, card_grid)
     return False
 
 # ===================== CLEANUP LOGIC =====================
@@ -205,12 +214,13 @@ HOST_HTML = """
         <button class="mode-btn blackout-5" id="mode-5" onclick="setMode(5)">Blackout ($5/card)</button>
     </div>
     <div class="pattern-section">
-        <div class="pattern-title">🎯 TARGET PATTERN</div>
+    <div class="pattern-title">🎯 TARGET PATTERN</div>
         <div class="pattern-container">
             <button class="pattern-btn active" id="pat-straight" onclick="setPattern('straight')">Straight</button>
             <button class="pattern-btn" id="pat-4sides" onclick="setPattern('4sides')">4 Sides</button>
             <button class="pattern-btn" id="pat-parallel" onclick="setPattern('parallel')">Parallel</button>
             <button class="pattern-btn" id="pat-cross" onclick="setPattern('cross')">Cross (X)</button>
+            <button class="pattern-btn" id="pat-blackout" onclick="setPattern('blackout')" style="background: linear-gradient(135deg, #ff0000, #990000); color: white; border-color: #ff6666;">BLACKOUT</button>
             <div class="pattern-preview" id="pattern-preview"></div>
         </div>
     </div>
@@ -350,28 +360,37 @@ HOST_HTML = """
                 });
         }
         function renderPatternPreview(pattern) {
-            const grid = document.getElementById('pattern-preview');
-            grid.innerHTML = '';
-            const activeCells = [];
-            if (pattern === 'straight') {
-                for(let i=0; i<5; i++) activeCells.push([2, i], [i, 2], [i, i], [i, 4-i]);
-            } else if (pattern === '4sides') {
-                for(let i=0; i<5; i++) activeCells.push([0, i], [4, i], [i, 0], [i, 4]);
-            } else if (pattern === 'parallel') {
-                for(let i=0; i<5; i++) activeCells.push([0, i], [1, i], [i, 0], [i, 1]);
-            } else if (pattern === 'cross') {
-                for(let i=0; i<5; i++) activeCells.push([i, i], [i, 4-i]);
-            }
-            for(let r=0; r<5; r++) {
-                for(let c=0; c<5; c++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'p-cell';
-                    if (r===2 && c===2) cell.classList.add('free');
-                    else if (activeCells.some(([ar, ac]) => ar===r && ac===c)) cell.classList.add('active');
-                    grid.appendChild(cell);
-                }
+    const grid = document.getElementById('pattern-preview');
+    grid.innerHTML = '';
+    const activeCells = [];
+    
+    if (pattern === 'straight') {
+        for(let i=0; i<5; i++) activeCells.push([2, i], [i, 2], [i, i], [i, 4-i]);
+    } else if (pattern === '4sides') {
+        for(let i=0; i<5; i++) activeCells.push([0, i], [4, i], [i, 0], [i, 4]);
+    } else if (pattern === 'parallel') {
+        for(let i=0; i<5; i++) activeCells.push([0, i], [1, i], [i, 0], [i, 1]);
+    } else if (pattern === 'cross') {
+        for(let i=0; i<5; i++) activeCells.push([i, i], [i, 4-i]);
+    } else if (pattern === 'blackout') {
+        // Show ALL cells for blackout
+        for(let r=0; r<5; r++) {
+            for(let c=0; c<5; c++) {
+                activeCells.push([r, c]);
             }
         }
+    }
+    
+    for(let r=0; r<5; r++) {
+        for(let c=0; c<5; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'p-cell';
+            if (r===2 && c===2) cell.classList.add('free');
+            else if (activeCells.some(([ar, ac]) => ar===r && ac===c)) cell.classList.add('active');
+            grid.appendChild(cell);
+        }
+    }
+}
         function updatePlayers() {
             fetch('/api/get_players?t=' + Date.now()).then(r => r.json()).then(data => {
                 const list = document.getElementById('players-list');
@@ -501,7 +520,7 @@ PLAYER_HTML = """
         let currentPattern = '{{ current_pattern }}';
         const ballColors = { B:'#2196F3', I:'#f44336', N:'#FF9800', G:'#4CAF50', O:'#FFEB3B' };
         const ballTextDark = { O: true };
-        const patternNames = { 'straight': 'STRAIGHT (Line)', '4sides': '4 SIDES (Frame)', 'parallel': 'PARALLEL (2 Lines)', 'cross': 'CROSS (X)' };
+        const patternNames = { 'straight': 'STRAIGHT (Line)', '4sides': '4 SIDES (Frame)', 'parallel': 'PARALLEL (2 Lines)', 'cross': 'CROSS (X)', 'BLACKOUT (Full Card)' };
         function getLetter(n) { if(n<=15)return'B';if(n<=30)return'I';if(n<=45)return'N';if(n<=60)return'G';return'O'; }
         function createCardHTML(cardId, cardData, index) {
             let html = `<div class="card-wrapper" data-card-id="${cardId}">
@@ -757,7 +776,7 @@ def set_price(price):
 
 @app.route('/api/set_pattern/<pattern>', methods=['POST'])
 def set_pattern(pattern):
-    if pattern in ['straight', '4sides', 'parallel', 'cross']:
+    if pattern in ['straight', '4sides', 'parallel', 'cross', 'blackout']:
         game_state['current_pattern'] = pattern
         return jsonify({'success': True})
     return jsonify({'success': False})
