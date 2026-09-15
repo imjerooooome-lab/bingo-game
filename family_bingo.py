@@ -13,7 +13,7 @@ game_state = {
     'marked': {},
     'sessions': {},
     'session_names': {},
-    'last_seen': {},  # NEW: Tracks when players were last active
+    'last_seen': {},
     'winner': None,
     'game_over': False,
     'price_per_card': 1,
@@ -74,10 +74,9 @@ def check_cross(marked_set, card_grid):
     return False
 
 def check_blackout(marked_set, card_grid):
-    """Check if ALL numbers on the card are marked (except free space)"""
     for row in card_grid:
         for num in row:
-            if num != 0 and num not in marked_set:  # 0 is free space
+            if num != 0 and num not in marked_set:
                 return False
     return True
 
@@ -91,19 +90,14 @@ def check_bingo(marked_set, card_grid):
     if pattern == 'blackout': return check_blackout(marked_set, card_grid)
     return False
 
-# ===================== CLEANUP LOGIC =====================
 def cleanup_dead_sessions():
-    """Removes players who haven't sent a heartbeat in 15 seconds."""
     current_time = time.time()
     dead_sessions = []
-    
     for sid, last_time in game_state['last_seen'].items():
-        if current_time - last_time > 15: # 15 second timeout
+        if current_time - last_time > 15:
             dead_sessions.append(sid)
-
     for sid in dead_sessions:
         print(f"Removing dead session: {sid}")
-        # Remove their cards from the total count
         if sid in game_state['sessions']:
             for card_id in game_state['sessions'][sid]:
                 if card_id in game_state['cards']: del game_state['cards'][card_id]
@@ -112,7 +106,6 @@ def cleanup_dead_sessions():
         if sid in game_state['session_names']: del game_state['session_names'][sid]
         if sid in game_state['last_seen']: del game_state['last_seen'][sid]
 
-# ===================== HTML TEMPLATES =====================
 HOST_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -136,12 +129,14 @@ HOST_HTML = """
         .mode-btn.blackout-2.active { background: linear-gradient(135deg, #4CAF50, #2e7d32); color: white; box-shadow: 0 0 15px rgba(76,175,80,0.5); }
         .mode-btn.blackout-5 { border-color: #f44336; }
         .mode-btn.blackout-5.active { background: linear-gradient(135deg, #f44336, #c62828); color: white; box-shadow: 0 0 15px rgba(244,67,54,0.5); }
-        .pattern-section { margin: 20px auto; max-width: 600px; }
+        .pattern-section { margin: 20px auto; max-width: 700px; }
         .pattern-title { color: #ffd700; font-size: 1.1rem; margin-bottom: 10px; font-weight: bold; letter-spacing: 1px; }
-        .pattern-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; align-items: center; }
+        .pattern-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; align-items: center; }
         .pattern-btn { padding: 10px 15px; font-size: 0.9rem; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; font-weight: bold; color: white; background: rgba(255,255,255,0.05); transition: all 0.2s; }
         .pattern-btn:hover { background: rgba(255,255,255,0.1); }
         .pattern-btn.active { background: linear-gradient(135deg, #9c27b0, #6a1b9a); color: white; border-color: #e1bee7; box-shadow: 0 0 15px rgba(156,39,176,0.5); }
+        .pattern-btn.blackout-btn { background: linear-gradient(135deg, #ff0000, #990000); color: white; border-color: #ff6666; }
+        .pattern-btn.blackout-btn.active { background: linear-gradient(135deg, #ff0000, #990000); color: white; border-color: #ff6666; box-shadow: 0 0 15px rgba(255,0,0,0.5); }
         .pattern-preview { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; background: #333; padding: 6px; border-radius: 8px; width: 80px; border: 2px solid #ffd700; box-shadow: 0 0 10px rgba(255,215,0,0.3); }
         .p-cell { width: 100%; aspect-ratio: 1; background: rgba(255,255,255,0.1); border-radius: 2px; }
         .p-cell.active { background: #ffd700; box-shadow: 0 0 5px #ffd700; }
@@ -214,13 +209,13 @@ HOST_HTML = """
         <button class="mode-btn blackout-5" id="mode-5" onclick="setMode(5)">Blackout ($5/card)</button>
     </div>
     <div class="pattern-section">
-    <div class="pattern-title">🎯 TARGET PATTERN</div>
+        <div class="pattern-title">🎯 TARGET PATTERN</div>
         <div class="pattern-container">
             <button class="pattern-btn active" id="pat-straight" onclick="setPattern('straight')">Straight</button>
             <button class="pattern-btn" id="pat-4sides" onclick="setPattern('4sides')">4 Sides</button>
             <button class="pattern-btn" id="pat-parallel" onclick="setPattern('parallel')">Parallel</button>
             <button class="pattern-btn" id="pat-cross" onclick="setPattern('cross')">Cross (X)</button>
-            <button class="pattern-btn" id="pat-blackout" onclick="setPattern('blackout')" style="background: linear-gradient(135deg, #ff0000, #990000); color: white; border-color: #ff6666;">BLACKOUT</button>
+            <button class="pattern-btn blackout-btn" id="pat-blackout" onclick="setPattern('blackout')">BLACKOUT</button>
             <div class="pattern-preview" id="pattern-preview"></div>
         </div>
     </div>
@@ -251,7 +246,7 @@ HOST_HTML = """
         </div>
         <div class="players-column">
             <div class="players-list">
-                <h3>👥 Players in Game (<span id="player-count">0</span>)</h3>
+                <h3> Players in Game (<span id="player-count">0</span>)</h3>
                 <ul id="players-list">
                     <li style="text-align:center; color:#888; display:block;">Waiting for players...</li>
                 </ul>
@@ -360,37 +355,34 @@ HOST_HTML = """
                 });
         }
         function renderPatternPreview(pattern) {
-    const grid = document.getElementById('pattern-preview');
-    grid.innerHTML = '';
-    const activeCells = [];
-    
-    if (pattern === 'straight') {
-        for(let i=0; i<5; i++) activeCells.push([2, i], [i, 2], [i, i], [i, 4-i]);
-    } else if (pattern === '4sides') {
-        for(let i=0; i<5; i++) activeCells.push([0, i], [4, i], [i, 0], [i, 4]);
-    } else if (pattern === 'parallel') {
-        for(let i=0; i<5; i++) activeCells.push([0, i], [1, i], [i, 0], [i, 1]);
-    } else if (pattern === 'cross') {
-        for(let i=0; i<5; i++) activeCells.push([i, i], [i, 4-i]);
-    } else if (pattern === 'blackout') {
-        // Show ALL cells for blackout
-        for(let r=0; r<5; r++) {
-            for(let c=0; c<5; c++) {
-                activeCells.push([r, c]);
+            const grid = document.getElementById('pattern-preview');
+            grid.innerHTML = '';
+            const activeCells = [];
+            if (pattern === 'straight') {
+                for(let i=0; i<5; i++) activeCells.push([2, i], [i, 2], [i, i], [i, 4-i]);
+            } else if (pattern === '4sides') {
+                for(let i=0; i<5; i++) activeCells.push([0, i], [4, i], [i, 0], [i, 4]);
+            } else if (pattern === 'parallel') {
+                for(let i=0; i<5; i++) activeCells.push([0, i], [1, i], [i, 0], [i, 1]);
+            } else if (pattern === 'cross') {
+                for(let i=0; i<5; i++) activeCells.push([i, i], [i, 4-i]);
+            } else if (pattern === 'blackout') {
+                for(let r=0; r<5; r++) {
+                    for(let c=0; c<5; c++) {
+                        activeCells.push([r, c]);
+                    }
+                }
+            }
+            for(let r=0; r<5; r++) {
+                for(let c=0; c<5; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'p-cell';
+                    if (r===2 && c===2) cell.classList.add('free');
+                    else if (activeCells.some(([ar, ac]) => ar===r && ac===c)) cell.classList.add('active');
+                    grid.appendChild(cell);
+                }
             }
         }
-    }
-    
-    for(let r=0; r<5; r++) {
-        for(let c=0; c<5; c++) {
-            const cell = document.createElement('div');
-            cell.className = 'p-cell';
-            if (r===2 && c===2) cell.classList.add('free');
-            else if (activeCells.some(([ar, ac]) => ar===r && ac===c)) cell.classList.add('active');
-            grid.appendChild(cell);
-        }
-    }
-}
         function updatePlayers() {
             fetch('/api/get_players?t=' + Date.now()).then(r => r.json()).then(data => {
                 const list = document.getElementById('players-list');
@@ -520,7 +512,7 @@ PLAYER_HTML = """
         let currentPattern = '{{ current_pattern }}';
         const ballColors = { B:'#2196F3', I:'#f44336', N:'#FF9800', G:'#4CAF50', O:'#FFEB3B' };
         const ballTextDark = { O: true };
-        const patternNames = { 'straight': 'STRAIGHT (Line)', '4sides': '4 SIDES (Frame)', 'parallel': 'PARALLEL (2 Lines)', 'cross': 'CROSS (X)', 'BLACKOUT (Full Card)' };
+        const patternNames = { 'straight': 'STRAIGHT (Line)', '4sides': '4 SIDES (Frame)', 'parallel': 'PARALLEL (2 Lines)', 'cross': 'CROSS (X)', 'blackout': 'BLACKOUT (Full Card)' };
         function getLetter(n) { if(n<=15)return'B';if(n<=30)return'I';if(n<=45)return'N';if(n<=60)return'G';return'O'; }
         function createCardHTML(cardId, cardData, index) {
             let html = `<div class="card-wrapper" data-card-id="${cardId}">
@@ -561,6 +553,10 @@ PLAYER_HTML = """
                     const count = container.children.length + 1;
                     container.innerHTML += createCardHTML(data.card_id, data.card, count);
                     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                })
+                .catch(err => {
+                    console.error('Error adding card:', err);
+                    alert('Failed to add card. Please try again.');
                 });
         }
         function removeCard(cardId, element) {
@@ -628,12 +624,9 @@ PLAYER_HTML = """
                 }
             });
         }
-        
-        // HEARTBEAT: Tell server I'm still here every 5 seconds
         setInterval(() => {
             fetch(`/api/heartbeat/${sessionId}`, { method: 'POST' });
         }, 5000);
-
         setInterval(() => {
             fetch('/api/check_winner').then(r => r.json()).then(data => {
                 if (data.winner && !isModalShowing) showGameOverModal(data.winner_name, data.total_pot);
@@ -665,7 +658,6 @@ PLAYER_HTML = """
 </html>
 """
 
-# ===================== ROUTES =====================
 @app.route('/')
 def landing():
     return render_template_string("""
@@ -705,7 +697,7 @@ def join_page():
     session_id = str(uuid.uuid4())
     game_state['sessions'][session_id] = []
     game_state['session_names'][session_id] = f"Player {session_id[:6]}"
-    game_state['last_seen'][session_id] = time.time() # Set initial heartbeat
+    game_state['last_seen'][session_id] = time.time()
     new_card_id = str(uuid.uuid4())
     game_state['cards'][new_card_id] = generate_card()
     game_state['marked'][new_card_id] = set()
@@ -723,8 +715,7 @@ def player(session_id):
         game_state['marked'][new_card_id] = set()
         game_state['sessions'][session_id].append(new_card_id)
     else:
-        game_state['last_seen'][session_id] = time.time() # Update heartbeat on load
-        
+        game_state['last_seen'][session_id] = time.time()
     session_cards = [(cid, game_state['cards'][cid]) for cid in game_state['sessions'][session_id]]
     player_name = game_state['session_names'][session_id]
     game_started = len(game_state['called_numbers']) > 0
@@ -783,7 +774,7 @@ def set_pattern(pattern):
 
 @app.route('/api/get_players')
 def get_players():
-    cleanup_dead_sessions() # Check for leavers
+    cleanup_dead_sessions()
     players = []
     for sid, cards in game_state['sessions'].items():
         name = game_state['session_names'].get(sid, f"Player {sid[:6]}")
@@ -812,7 +803,7 @@ def claim_bingo():
                 marked_nums = set(marked_cards[card_id])
                 valid_marks = marked_nums.issubset(set(game_state['called_numbers']) | {0})
                 if not valid_marks:
-                    return jsonify({'win': False, 'message': '⚠️ You marked a number that hasn\'t been called yet!'})
+                    return jsonify({'win': False, 'message': '️ You marked a number that hasn\'t been called yet!'})
                 game_state['marked'][card_id] = marked_nums
                 if check_bingo(marked_nums, game_state['cards'][card_id]):
                     game_state['winner'] = session_id
@@ -822,7 +813,7 @@ def claim_bingo():
 
 @app.route('/api/check_winner')
 def check_winner():
-    cleanup_dead_sessions() # Check for leavers
+    cleanup_dead_sessions()
     winner_name = "Unknown"
     if game_state['winner']:
         winner_name = game_state['session_names'].get(game_state['winner'], "Player")
