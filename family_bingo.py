@@ -1,6 +1,7 @@
 import random
 import uuid
 import os
+import time
 from flask import Flask, render_template_string, request, jsonify, redirect
 
 app = Flask(__name__)
@@ -12,6 +13,7 @@ game_state = {
     'marked': {},
     'sessions': {},
     'session_names': {},
+    'last_seen': {},  # NEW: Tracks when players were last active
     'winner': None,
     'game_over': False,
     'price_per_card': 1,
@@ -80,6 +82,28 @@ def check_bingo(marked_set, card_grid):
     if pattern == 'cross': return check_cross(marked_set, card_grid)
     return False
 
+# ===================== CLEANUP LOGIC =====================
+def cleanup_dead_sessions():
+    """Removes players who haven't sent a heartbeat in 15 seconds."""
+    current_time = time.time()
+    dead_sessions = []
+    
+    for sid, last_time in game_state['last_seen'].items():
+        if current_time - last_time > 15: # 15 second timeout
+            dead_sessions.append(sid)
+
+    for sid in dead_sessions:
+        print(f"Removing dead session: {sid}")
+        # Remove their cards from the total count
+        if sid in game_state['sessions']:
+            for card_id in game_state['sessions'][sid]:
+                if card_id in game_state['cards']: del game_state['cards'][card_id]
+                if card_id in game_state['marked']: del game_state['marked'][card_id]
+            del game_state['sessions'][sid]
+        if sid in game_state['session_names']: del game_state['session_names'][sid]
+        if sid in game_state['last_seen']: del game_state['last_seen'][sid]
+
+# ===================== HTML TEMPLATES =====================
 HOST_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -585,6 +609,12 @@ PLAYER_HTML = """
                 }
             });
         }
+        
+        // HEARTBEAT: Tell server I'm still here every 5 seconds
+        setInterval(() => {
+            fetch(`/api/heartbeat/${sessionId}`, { method: 'POST' });
+        }, 5000);
+
         setInterval(() => {
             fetch('/api/check_winner').then(r => r.json()).then(data => {
                 if (data.winner && !isModalShowing) showGameOverModal(data.winner_name, data.total_pot);
@@ -656,6 +686,7 @@ def join_page():
     session_id = str(uuid.uuid4())
     game_state['sessions'][session_id] = []
     game_state['session_names'][session_id] = f"Player {session_id[:6]}"
+    game_state['last_seen'][session_id] = time.time() # Set initial heartbeat
     new_card_id = str(uuid.uuid4())
     game_state['cards'][new_card_id] = generate_card()
     game_state['marked'][new_card_id] = set()
@@ -667,14 +698,24 @@ def player(session_id):
     if session_id not in game_state['sessions']:
         game_state['sessions'][session_id] = []
         game_state['session_names'][session_id] = f"Player {session_id[:6]}"
+        game_state['last_seen'][session_id] = time.time()
         new_card_id = str(uuid.uuid4())
         game_state['cards'][new_card_id] = generate_card()
         game_state['marked'][new_card_id] = set()
         game_state['sessions'][session_id].append(new_card_id)
+    else:
+        game_state['last_seen'][session_id] = time.time() # Update heartbeat on load
+        
     session_cards = [(cid, game_state['cards'][cid]) for cid in game_state['sessions'][session_id]]
     player_name = game_state['session_names'][session_id]
     game_started = len(game_state['called_numbers']) > 0
     return render_template_string(PLAYER_HTML, session_id=session_id, cards=session_cards, player_name=player_name, game_started=game_started, price_per_card=game_state['price_per_card'], current_pattern=game_state['current_pattern'])
+
+@app.route('/api/heartbeat/<session_id>', methods=['POST'])
+def heartbeat(session_id):
+    if session_id in game_state['sessions']:
+        game_state['last_seen'][session_id] = time.time()
+    return jsonify({'success': True})
 
 @app.route('/api/add_card/<session_id>', methods=['POST'])
 def add_card(session_id):
@@ -687,6 +728,7 @@ def add_card(session_id):
     game_state['cards'][new_card_id] = generate_card()
     game_state['marked'][new_card_id] = set()
     game_state['sessions'][session_id].append(new_card_id)
+    game_state['last_seen'][session_id] = time.time()
     return jsonify({'success': True, 'card_id': new_card_id, 'card': game_state['cards'][new_card_id]})
 
 @app.route('/api/remove_card/<session_id>/<card_id>', methods=['POST'])
@@ -722,6 +764,7 @@ def set_pattern(pattern):
 
 @app.route('/api/get_players')
 def get_players():
+    cleanup_dead_sessions() # Check for leavers
     players = []
     for sid, cards in game_state['sessions'].items():
         name = game_state['session_names'].get(sid, f"Player {sid[:6]}")
@@ -760,6 +803,7 @@ def claim_bingo():
 
 @app.route('/api/check_winner')
 def check_winner():
+    cleanup_dead_sessions() # Check for leavers
     winner_name = "Unknown"
     if game_state['winner']:
         winner_name = game_state['session_names'].get(game_state['winner'], "Player")
@@ -801,6 +845,7 @@ def reset_game():
     game_state['marked'].clear()
     game_state['sessions'].clear()
     game_state['session_names'].clear()
+    game_state['last_seen'].clear()
     game_state['winner'] = None
     game_state['game_over'] = False
     game_state['price_per_card'] = 1
