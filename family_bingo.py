@@ -1,7 +1,7 @@
 import os
 import random
 import uuid
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, redirect
 
 app = Flask(__name__)
 
@@ -621,46 +621,27 @@ PLAYER_HTML = """
 """
 LANDING_HTML = """
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Family Bingo Night</title>
+    <title>Family Bingo</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a2e, #16213e); color: white; text-align: center; padding: 50px 20px; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 0; }
-        h1 { color: #ffd700; font-size: 3rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
-        p { font-size: 1.2rem; color: #aaa; margin-bottom: 40px; }
-        .btn-container { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 300px; }
-        .btn { padding: 20px; font-size: 1.2rem; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        .btn:active { transform: scale(0.95); }
-        .host-btn { background: linear-gradient(135deg, #4caf50, #2e7d32); }
-        .player-btn { background: linear-gradient(135deg, #2196F3, #1565C0); }
+        body { font-family: sans-serif; background: #1a1a2e; color: white; text-align: center; padding: 50px; }
+        h1 { color: #ffd700; }
+        .box { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 10px; margin: 20px auto; max-width: 400px; }
+        .link { background: #2196F3; padding: 15px; border-radius: 5px; margin: 10px 0; word-break: break-all; font-size: 0.9rem; }
+        .host { background: #4caf50; }
     </style>
 </head>
 <body>
-    <h1>🎱 Family Bingo! </h1>
-    <p>Welcome! Please choose your role:</p>
-    <div class="btn-container">
-        <button class="btn host-btn" onclick="window.location.href='/host'">I am the HOST (Caller)</button>
-        <button class="btn player-btn" onclick="joinGame()">I am a PLAYER</button>
+    <h1>🎱 Family Bingo</h1>
+    <div class="box">
+        <h3>Host Link (You):</h3>
+        <div class="link host">""" + request.host_url + """host</div>
     </div>
-
-    <script>
-        function joinGame() {
-            let name = prompt("Enter your name to join:");
-            if (name) {
-                fetch('/api/create_session', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name: name})
-                })
-                .then(r => r.json())
-                .then(data => {
-                    window.location.href = '/play/' + data.session_id;
-                });
-            }
-        }
-    </script>
+    <div class="box">
+        <h3>Player Link (Share this):</h3>
+        <div class="link">""" + request.host_url + """join</div>
+    </div>
 </body>
 </html>
 """
@@ -668,6 +649,18 @@ LANDING_HTML = """
 @app.route('/')
 def landing():
     return render_template_string(LANDING_HTML)
+
+@app.route('/join')
+def join_page():
+    session_id = str(uuid.uuid4())
+    game_state['sessions'][session_id] = []
+    game_state['session_names'][session_id] = f"Player {session_id[:6]}"
+    # Create first card
+    new_card_id = str(uuid.uuid4())
+    game_state['cards'][new_card_id] = generate_card()
+    game_state['marked'][new_card_id] = set()
+    game_state['sessions'][session_id].append(new_card_id)
+    return redirect(f'/play/{session_id}')
 
 @app.route('/host')
 def host():
