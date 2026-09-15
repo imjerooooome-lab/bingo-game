@@ -17,7 +17,8 @@ game_state = {
     'winner': None,
     'game_over': False,
     'price_per_card': 1,
-    'current_pattern': 'straight'
+    'current_pattern': 'straight',
+    'chat_messages': []
 }
 
 def get_ball_letter(num):
@@ -193,10 +194,19 @@ HOST_HTML = """
         .winner-alert { color: #ffd700; font-size: 2rem; font-weight: bold; animation: pulse 1s infinite; text-shadow: 0 0 20px rgba(255,215,0,0.5); margin: 10px 0; }
         @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
         @media (max-width: 900px) { .stage { flex-direction: column; align-items: center; } .players-column, .board-column { width: 100%; max-width: 400px; } }
+        .sound-btn { background: #333; color: white; border: 1px solid #555; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; margin-bottom: 10px; }
+        .chat-box { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 10px; margin-top: 20px; text-align: left; max-width: 350px; margin-left: auto; margin-right: auto; }
+        .chat-messages { height: 150px; overflow-y: auto; margin-bottom: 10px; font-size: 0.9rem; border-bottom: 1px solid #555; padding-bottom: 5px; }
+        .chat-msg { margin-bottom: 5px; word-wrap: break-word; }
+        .chat-name { color: #ffd700; font-weight: bold; }
+        .chat-input-area { display: flex; gap: 5px; }
+        .chat-input { flex: 1; padding: 8px; border-radius: 5px; border: none; }
+        .chat-send { background: #2196F3; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
     <h1>🎱 BINGO CALLER 🎱</h1>
+    <button class="sound-btn" onclick="enableSound()"> Enable Sound Effects</button>
     <div class="pot-container">
         <div class="pot-display">
             <div class="pot-label">Current Pot</div>
@@ -250,6 +260,14 @@ HOST_HTML = """
                 <ul id="players-list">
                     <li style="text-align:center; color:#888; display:block;">Waiting for players...</li>
                 </ul>
+                <div class="chat-box">
+                <h4 style="margin:0 0 10px 0; color:#ffd700;">💬 Game Chat</h4>
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input-area">
+                    <input type="text" class="chat-input" id="chat-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendChat()">
+                    <button class="chat-send" onclick="sendChat()">Send</button>
+                </div>
+            </div>
             </div>
         </div>
         <div class="board-column">
@@ -258,6 +276,35 @@ HOST_HTML = """
         </div>
     </div>
     <script>
+                let soundEnabled = false;
+        const popSound = new Audio('https://actions.google.com/sounds/v1/cartoon/pop.ogg');
+        const winSound = new Audio('https://actions.google.com/sounds/v1/crowds/female_cheer.ogg');
+        
+        function enableSound() {
+            soundEnabled = true;
+            popSound.play().then(() => popSound.pause()).catch(() => {});
+            document.querySelector('.sound-btn').innerText = '🔊 Sound Enabled!';
+        }
+        function playPop() { if(soundEnabled) { popSound.currentTime = 0; popSound.play(); } }
+        function playWin() { if(soundEnabled) { winSound.currentTime = 0; winSound.play(); } }
+        
+        function sendChat() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value;
+            if(msg) {
+                fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: 'HOST', msg: msg}) });
+                input.value = '';
+            }
+        }
+        function updateChat() {
+            fetch('/api/chat').then(r => r.json()).then(data => {
+                const chatBox = document.getElementById('chat-messages');
+                if(chatBox) {
+                    chatBox.innerHTML = data.messages.map(m => `<div class="chat-msg"><span class="chat-name">${m.name}:</span> ${m.msg}</div>`).join('');
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            });
+        }
         const ballColors = { B:'#2196F3', I:'#f44336', N:'#FF9800', G:'#4CAF50', O:'#FFEB3B' };
         const ballTextDark = { O: true };
         function getLetter(n) { if(n<=15)return'B';if(n<=30)return'I';if(n<=45)return'N';if(n<=60)return'G';return'O'; }
@@ -473,10 +520,19 @@ PLAYER_HTML = """
         .modal-pot { font-size: 2.5rem; font-weight: 900; color: #ff8c00; margin: 10px 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
         .modal-btn { background: linear-gradient(135deg, #4caf50, #388e3c); color: white; border: none; padding: 15px 30px; font-size: 1.3rem; border-radius: 10px; margin-top: 10px; cursor: pointer; font-weight: bold; width: 100%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .modal-btn:active { transform: scale(0.97); }
+        .sound-btn { background: #333; color: white; border: 1px solid #555; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; margin-bottom: 10px; }
+        .chat-box { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 10px; margin-top: 20px; text-align: left; max-width: 350px; margin-left: auto; margin-right: auto; }
+        .chat-messages { height: 150px; overflow-y: auto; margin-bottom: 10px; font-size: 0.9rem; border-bottom: 1px solid #555; padding-bottom: 5px; }
+        .chat-msg { margin-bottom: 5px; word-wrap: break-word; }
+        .chat-name { color: #ffd700; font-weight: bold; }
+        .chat-input-area { display: flex; gap: 5px; }
+        .chat-input { flex: 1; padding: 8px; border-radius: 5px; border: none; }
+        .chat-send { background: #2196F3; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
     <h2>Session: {{ session_id[:6] }}</h2>
+    <button class="sound-btn" onclick="enableSound()" style="background:#2196F3; border:none; margin: 0 auto 10px; display:block;"> Enable Sound Effects</button>
     <div class="player-pot">Prize Pot: $<span id="player-pot-amount">0</span></div>
     <div class="target-pattern" id="target-pattern-display">🎯 Target: STRAIGHT (Line)</div>
     <div class="called-ball-area">
@@ -653,7 +709,24 @@ PLAYER_HTML = """
                 }
             });
         }, 2000);
+        function sendChat() {
+                const input = document.getElementById('chat-input');
+                const msg = input.value;
+                const name = document.getElementById('player-name').value || 'Player';
+                if(msg) {
+                    fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: name, msg: msg}) });
+                    input.value = '';
+                }
+            }
     </script>
+    <div class="chat-box">
+    <h4 style="margin:0 0 10px 0; color:#ffd700;">💬 Game Chat</h4>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-area">
+        <input type="text" class="chat-input" id="chat-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') sendChat()">
+        <button class="chat-send" onclick="sendChat()">Send</button>
+    </div>
+</div>
 </body>
 </html>
 """
@@ -772,6 +845,21 @@ def set_pattern(pattern):
         return jsonify({'success': True})
     return jsonify({'success': False})
 
+@app.route('/api/chat', methods=['GET'])
+def get_chat():
+    return jsonify({'messages': game_state['chat_messages']})
+
+@app.route('/api/chat', methods=['POST'])
+def post_chat():
+    data = request.json
+    name = data.get('name', 'Anonymous')
+    msg = data.get('msg', '').strip()
+    if msg:
+        game_state['chat_messages'].append({'name': name, 'msg': msg})
+        if len(game_state['chat_messages']) > 50:
+            game_state['chat_messages'].pop(0)
+    return jsonify({'success': True})
+
 @app.route('/api/get_players')
 def get_players():
     cleanup_dead_sessions()
@@ -837,6 +925,7 @@ def next_round():
         game_state['marked'][card_id] = set()
     game_state['winner'] = None
     game_state['game_over'] = False
+    game_state['chat_messages'].clear()
     return jsonify({'status': 'next_round'})
 
 @app.route('/api/clear_marks/<session_id>', methods=['POST'])
@@ -860,6 +949,7 @@ def reset_game():
     game_state['game_over'] = False
     game_state['price_per_card'] = 1
     game_state['current_pattern'] = 'straight'
+    game_state['chat_messages'].clear()
     return jsonify({'status': 'reset'})
 
 if __name__ == '__main__':
