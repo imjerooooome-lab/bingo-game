@@ -882,9 +882,7 @@ def claim_bingo():
                 game_state['marked'][card_id] = marked_nums
                 if check_bingo(marked_nums, game_state['cards'][card_id]):
                game_state['winner'] = session_id
-               game_state['game_over'] = True
-                    
-              # Calculate pot and update player stats
+              game_state['game_over'] = True
               pot = get_total_pot()
               game_state['player_wins'][session_id] = game_state['player_wins'].get(session_id, 0) + 1
               game_state['player_winnings'][session_id] = game_state['player_winnings'].get(session_id, 0) + pot
