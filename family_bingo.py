@@ -17,7 +17,9 @@ game_state = {
     'winner': None,
     'game_over': False,
     'price_per_card': 1,
-    'current_pattern': 'straight'
+    'current_pattern': 'straight',
+    'player_wins': {},
+    'player_winnings': {}
 }
 
 def get_ball_letter(num):
@@ -408,9 +410,15 @@ HOST_HTML = """
                 } else {
                     countSpan.innerText = data.players.length;
                     list.innerHTML = data.players.map(p => `
-                        <li>
-                            <span><strong>${p.name}</strong> <span style="color:#888; font-size:0.75rem;">(${p.id})</span></span>
-                            <span class="player-cards">${p.card_count} card${p.card_count !== 1 ? 's' : ''}</span>
+                        <li style="flex-direction: column; align-items: flex-start; gap: 5px;">
+                            <div style="display:flex; justify-content:space-between; width:100%;">
+                                <span><strong>${p.name}</strong> <span style="color:#888; font-size:0.75rem;">(${p.id})</span></span>
+                                <span class="player-cards">${p.card_count} card${p.card_count !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: #aaa; width: 100%; display: flex; justify-content: space-between;">
+                                <span> Wins: <strong style="color:#ffd700">${p.wins}</strong></span>
+                                <span>💰 Won: <strong style="color:#4caf50">$${p.winnings}</strong></span>
+                            </div>
                         </li>
                     `).join('');
                 }
@@ -468,7 +476,23 @@ PLAYER_HTML = """
         .name-input input::placeholder { color: rgba(255,255,255,0.5); }
         .add-btn { background: linear-gradient(135deg, #ff9800, #f57c00); color: white; border: none; padding: 12px 24px; font-size: 1.1rem; border-radius: 10px; margin-bottom: 15px; font-weight: bold; width: 100%; max-width: 400px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .add-btn:active { transform: scale(0.97); }
-        .card-wrapper { margin-bottom: 25px; width: 100%; max-width: 400px; }
+                /* NEW: Horizontal Scroll Container */
+        #cards-container { 
+            display: flex; 
+            overflow-x: auto; 
+            scroll-snap-type: x mandatory; 
+            gap: 15px; 
+            padding: 10px 0; 
+            width: 100%; 
+            -webkit-overflow-scrolling: touch; 
+        }
+        .card-wrapper { 
+            flex: 0 0 320px; /* Fixed width for horizontal scroll */
+            scroll-snap-align: center; 
+            margin-bottom: 0; /* Remove vertical margin */
+            width: 320px;
+            max-width: 85vw;
+        }
         .card-wrapper h3 { display: flex; justify-content: space-between; align-items: center; margin: 0; background: #0a3470; padding: 10px 15px; border-radius: 10px 10px 0 0; font-size: 1.1rem; }
         .remove-btn { background: #f44336; color: white; border: none; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; font-weight: bold; }
         .remove-btn:active { background: #d32f2f; }
@@ -585,7 +609,10 @@ PLAYER_HTML = """
                     }
                     const count = container.children.length + 1;
                     container.innerHTML += createCardHTML(data.card_id, data.card, count);
-                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    
+                    // NEW: Scroll horizontally to the new card
+                    const newCard = container.lastElementChild;
+                    if(newCard) newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
                 })
                 .catch(err => {
                     console.error('Error adding card:', err);
@@ -820,7 +847,13 @@ def get_players():
     players = []
     for sid, cards in game_state['sessions'].items():
         name = game_state['session_names'].get(sid, f"Player {sid[:6]}")
-        players.append({'id': sid[:6], 'name': name, 'card_count': len(cards)})
+        players.append({
+            'id': sid[:6], 
+            'name': name, 
+            'card_count': len(cards),
+            'wins': game_state['player_wins'].get(sid, 0),       # <--- ADD THIS
+            'winnings': game_state['player_winnings'].get(sid, 0) # <--- ADD THIS
+        })
     return jsonify({'players': players, 'total_pot': get_total_pot(), 'price_per_card': game_state['price_per_card'], 'current_pattern': game_state['current_pattern']})
 
 @app.route('/api/call', methods=['POST'])
@@ -848,9 +881,15 @@ def claim_bingo():
                     return jsonify({'win': False, 'message': '️ You marked a number that hasn\'t been called yet!'})
                 game_state['marked'][card_id] = marked_nums
                 if check_bingo(marked_nums, game_state['cards'][card_id]):
-                    game_state['winner'] = session_id
-                    game_state['game_over'] = True
-                    return jsonify({'win': True, 'winning_card_index': index + 1, 'pot': get_total_pot()})
+               game_state['winner'] = session_id
+               game_state['game_over'] = True
+                    
+              # Calculate pot and update player stats
+              pot = get_total_pot()
+              game_state['player_wins'][session_id] = game_state['player_wins'].get(session_id, 0) + 1
+              game_state['player_winnings'][session_id] = game_state['player_winnings'].get(session_id, 0) + pot
+                    
+             return jsonify({'win': True, 'winning_card_index': index + 1, 'pot': pot})
     return jsonify({'win': False})
 
 @app.route('/api/check_winner')
@@ -902,6 +941,8 @@ def reset_game():
     game_state['game_over'] = False
     game_state['price_per_card'] = 1
     game_state['current_pattern'] = 'straight'
+    game_state['player_wins'].clear()
+    game_state['player_winnings'].clear()
     return jsonify({'status': 'reset'})
 
 if __name__ == '__main__':
