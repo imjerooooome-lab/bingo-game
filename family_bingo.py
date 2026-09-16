@@ -878,16 +878,17 @@ def claim_bingo():
                 marked_nums = set(marked_cards[card_id])
                 valid_marks = marked_nums.issubset(set(game_state['called_numbers']) | {0})
                 if not valid_marks:
-                    return jsonify({'win': False, 'message': '️ You marked a number that hasn\'t been called yet!'})
+                    return jsonify({'win': False, 'message': '⚠️ You marked a number that hasn\'t been called yet!'})
                 game_state['marked'][card_id] = marked_nums
                 if check_bingo(marked_nums, game_state['cards'][card_id]):
-               game_state['winner'] = session_id
-              game_state['game_over'] = True
-              pot = get_total_pot()
-              game_state['player_wins'][session_id] = game_state['player_wins'].get(session_id, 0) + 1
-              game_state['player_winnings'][session_id] = game_state['player_winnings'].get(session_id, 0) + pot
+                    game_state['winner'] = session_id
+                    game_state['game_over'] = True
                     
-             return jsonify({'win': True, 'winning_card_index': index + 1, 'pot': pot})
+                    pot = get_total_pot()
+                    game_state['player_wins'][session_id] = game_state['player_wins'].get(session_id, 0) + 1
+                    game_state['player_winnings'][session_id] = game_state['player_winnings'].get(session_id, 0) + pot
+                    
+                    return jsonify({'win': True, 'winning_card_index': index + 1, 'pot': pot})
     return jsonify({'win': False})
 
 @app.route('/api/check_winner')
